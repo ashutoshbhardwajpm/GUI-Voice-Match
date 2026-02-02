@@ -7,6 +7,9 @@ import ctypes
 import os
 
 RECORD_FILE = "recorded_sample.wav"
+RECORD_DURATION_MS = 5000  # Recording duration in milliseconds (5 seconds)
+
+recording = False  # State variable
 
 def extract_features(wav_path):
     with wave.open(wav_path, 'rb') as wf:
@@ -28,32 +31,33 @@ def browse_file():
     if path:
         uploaded_file.set(path)
 
-def start_recording():
-    status_label.config(
-        text="Recording started... Speak now",
-        fg="red"
-    )
-    root.update()
+def toggle_recording():
+    global recording
+    if not recording:
+        # Start recording
+        recording = True
+        record_button.config(text="Stop Recording")
+        status_label.config(text="Recording started... Speak now", fg="red")
+        root.update()
 
-    ctypes.windll.winmm.mciSendStringW(
-        "open new Type waveaudio Alias recsound", None, 0, None
-    )
-    ctypes.windll.winmm.mciSendStringW(
-        "record recsound", None, 0, None
-    )
+        ctypes.windll.winmm.mciSendStringW("open new Type waveaudio Alias recsound", None, 0, None)
+        ctypes.windll.winmm.mciSendStringW("record recsound", None, 0, None)
 
-def stop_recording():
-    ctypes.windll.winmm.mciSendStringW(
-        f"save recsound {RECORD_FILE}", None, 0, None
-    )
-    ctypes.windll.winmm.mciSendStringW(
-        "close recsound", None, 0, None
-    )
+        # Automatically stop recording after duration
+        root.after(RECORD_DURATION_MS, stop_recording_auto)
+    else:
+        # Manual stop (if user clicks early)
+        stop_recording_auto()
 
-    status_label.config(
-        text="Recording stopped and saved",
-        fg="green"
-    )
+def stop_recording_auto():
+    global recording
+    if recording:
+        ctypes.windll.winmm.mciSendStringW(f"save recsound {RECORD_FILE}", None, 0, None)
+        ctypes.windll.winmm.mciSendStringW("close recsound", None, 0, None)
+
+        status_label.config(text="Recording stopped and saved", fg="green")
+        record_button.config(text="Start Recording")
+        recording = False
 
 def match_voices():
     if not uploaded_file.get():
@@ -74,9 +78,7 @@ def match_voices():
 
     similarity = max(0, 100 - distance / 1000)
 
-    result_label.config(
-        text=f"Voice Match Similarity: {similarity:.2f} %"
-    )
+    result_label.config(text=f"Voice Match Similarity: {similarity:.2f} %")
 
 root = tk.Tk()
 root.title("Voice Matching Tool")
@@ -89,8 +91,8 @@ tk.Entry(root, textvariable=uploaded_file, width=60).pack()
 tk.Button(root, text="Browse WAV File", command=browse_file).pack(pady=5)
 
 tk.Label(root, text="Record Your Voice").pack(pady=10)
-tk.Button(root, text="Start Recording", command=start_recording).pack()
-tk.Button(root, text="Stop Recording", command=stop_recording).pack(pady=5)
+record_button = tk.Button(root, text="Start Recording", command=toggle_recording)
+record_button.pack(pady=5)
 
 status_label = tk.Label(root, text="", font=("Arial", 10))
 status_label.pack(pady=5)
